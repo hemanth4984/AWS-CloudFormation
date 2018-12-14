@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: Lambda function configuration
+
+Resources:
+
+  MyApi:
+
+    Type: 'AWS::ApiGateway::RestApi'
+
+    Properties:
+
+      Name: test-rest-api
+
+      Description: Test REST API
+
+  Stack:
+
+    Type: 'AWS::ApiGateway::Resource'
+
+    Properties:
+
+      RestApiId:
+
+        Ref: MyApi
+
+      ParentId:
+
+        'Fn::GetAtt':
+
+          - MyApi
+
+          - RootResourceId
+
+      PathPart: stack
+
+  Deployment:
+
+    DependsOn: MyMethod
+
+    Type: 'AWS::ApiGateway::Deployment'
+
+    Properties:
+
+      RestApiId:
+
+        Ref: MyApi
+
+      Description: My deployment
+
+      StageName: DummyStage
+
+  MyMethod:
+
+    Type: 'AWS::ApiGateway::Method'
+
+    Properties:
+
+      RestApiId:
+
+        Ref: MyApi
+
+      ResourceId:
+
+        'Fn::GetAtt':
+
+          - MyApi
+
+          - RootResourceId
+
+      HttpMethod: GET
+
+      AuthorizationType: NONE
+
+      Integration:
+
+        Type: MOCK
+
+  Prod:
+
+    Type: AWS::ApiGateway::Stage
+
+    Properties:
+
+      StageName: Prod
+
+      Description: Prod Stage
+
+      RestApiId: !Ref MyApi
+
+      DeploymentId: !Ref Deployment
+
+  Dev:
+
+    Type: AWS::ApiGateway::Stage
+
+    Properties:
+
+      StageName: Dev
+
+      Description: Prod Stage
+
+      RestApiId: !Ref MyApi
+
+      DeploymentId: !Ref Deployment
+
+  Qa:
+
+    Type: AWS::ApiGateway::Stage
+
+    Properties:
+
+      StageName: Qa
+
+      Description: Prod Stage
+
+      RestApiId: !Ref MyApi
+
+      DeploymentId: !Ref Deployment  
