@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Lambda function configuration
+Resources:
+  LambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName:
+        'Fn::Sub': lambda-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+        Version: 2012-10-17
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Effect: Allow
+                Resource:
+                  - !Sub >-
+                    arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/LambdaFunction:*
+          PolicyName: lambda
+  LambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Description: LambdaFunctioni of nodejs4.3.
+      Runtime: nodejs4.3
+      FunctionName: Minfy
+      Code:
+        ZipFile: |-
+          exports.handler = (event, context, callback) => {
+          callback(null, { statusCode: 200, body: 'Hello from Lambda' });
+            };
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 10
+      Role:
+        'Fn::GetAtt':
+          - LambdaRole
+          - Arn
+  TestingNewFeature:
+    Type: 'AWS::Lambda::Version'
+    Properties:
+      FunctionName:
+        Ref: LambdaFunction
+      Description: A test version of MyFunction
+  AliasForMyApp:
+    Type: 'AWS::Lambda::Alias'
+    Properties:
+      FunctionName:
+        Ref: LambdaFunction
+      FunctionVersion:
+        'Fn::GetAtt':
+          - TestingNewFeature
+          - Version
+      Name: Dev
+  MyApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: MinfyApi
+      Description: Test REST API
+  Stack:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId:
+        Ref: MyApi
+      ParentId:
+        'Fn::GetAtt':
+          - MyApi
+          - RootResourceId
+      PathPart: '{proxy+}'
+  Deployment:
+    DependsOn: MyMethod
+    Type: 'AWS::ApiGateway::Deployment'
+    Properties:
+      RestApiId:
+        Ref: MyApi
+      Description: My deployment
+      StageName: Prod
+  MyMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - >-
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionArn}/invocations
+          - lambdaFunctionArn: !Sub '${LambdaFunction.Arn}'
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json: |
+            {
+               "output": "\"Approve link was clicked.\"",
+               "taskToken": "$input.params('taskToken')"
+            }
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$.body')
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+      OperationName: succeed
+      ResourceId: !Ref Stack
+      RestApiId: !Ref MyApi
+  lambdaApiGatewayInvoke:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:*'
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyApi}/Dev/*'
+  lambdaLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: LambdaFunctionLog
+      RetentionInDays: 90
+  Dev:
+    Type: 'AWS::ApiGateway::Stage'
+    Properties:
+      StageName: Dev
+      Description: Prod Stage
+      RestApiId: !Ref MyApi
+      DeploymentId: !Ref Deployment
+  Qa:
+    Type: 'AWS::ApiGateway::Stage'
+    Properties:
+      StageName: Qa
+      Description: Prod Stage
+      RestApiId: !Ref MyApi
+      DeploymentId: !Ref Deployment
